@@ -3,8 +3,8 @@ import asyncio
 from httpx import AsyncClient
 
 
-async def captcha(proxies: dict):
-    client = AsyncClient(proxies=proxies)
+async def captcha(proxy: str = None, proxies: dict = None):
+    client = AsyncClient(proxy=proxy, proxies=proxies)
     response = (
         await client.get(
             "https://www.google.com/recaptcha/api2/anchor?ar=1&k=6Ld_hskiAAAAADfg9HredZvZx8Z_C8FrNJ519Rc6&co=aHR0cHM6Ly9waXhhaS5hcnQ6NDQz&hl=ja&v=aR-zv8WjtWx4lAw-tRCA-zca&size=invisible&cb=u2wj0bvs99s6",
@@ -45,10 +45,13 @@ class PixError(Exception):
 class PixAI:
     def __init__(
         self,
+        proxy: str = None,
         proxies: dict = None,
     ) -> None:
+        self.proxy = proxy
         self.proxies = proxies
         self.client = AsyncClient(
+            proxy=proxy,
             proxies=proxies,
             headers={
                 "Accept": "application/json, text/plain, */*",
@@ -86,7 +89,7 @@ class PixAI:
                     "input": {
                         "email": email,
                         "password": password,
-                        "recaptchaToken": await captcha(self.proxies),
+                        "recaptchaToken": await captcha(self.proxy, self.proxies),
                     }
                 },
             }
