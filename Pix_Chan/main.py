@@ -43,6 +43,7 @@ class PixError(Exception):
 
 class PixAI:
     def __init__(self, proxy: str = None):
+        self.proxy = proxy
         self.session = httpx.AsyncClient(proxy=proxy, timeout=None)
 
     async def initialize(
@@ -318,7 +319,12 @@ class PixAI:
         return mediaids
 
     async def generate_image(
-        self, prompts: str, width: int = 768, height: int = 1280, x4: bool = False
+        self,
+        prompts: str,
+        negative_prompts: str = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, quality bad, hands bad, eyes bad, face bad, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name\n",
+        width: int = 768,
+        height: int = 1280,
+        x4: bool = False,
     ):
         payload = {
             "query": "\n    mutation createGenerationTask($parameters: JSONObject!) {\n  createGenerationTask(parameters: $parameters) {\n    ...TaskBase\n  }\n}\n    \n    fragment TaskBase on Task {\n  id\n  userId\n  parameters\n  outputs\n  status\n  priority\n  runnerId\n  startedAt\n  endAt\n  createdAt\n  updatedAt\n  retryCount\n  paidCredit\n  moderationAction {\n    promptsModerationAction\n  }\n}\n    ",
@@ -326,7 +332,7 @@ class PixAI:
                 "parameters": {
                     "prompts": prompts,
                     "extra": {},
-                    "negativePrompts": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, quality bad, hands bad, eyes bad, face bad, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name\n",
+                    "negativePrompts": negative_prompts,
                     "samplingSteps": 25,  # ↑nsfwは消した、みんないらないよね？ (By たか)
                     "samplingMethod": "Euler a",
                     "cfgScale": 6,
