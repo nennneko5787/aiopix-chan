@@ -80,7 +80,7 @@ class PixAI:
                     "input": {
                         "email": email,
                         "password": password,
-                        "recaptchaToken": captcha(self.proxy),
+                        "recaptchaToken": await captcha(self.proxy),
                     }
                 },
             }
