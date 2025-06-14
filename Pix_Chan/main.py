@@ -5,9 +5,8 @@ import httpx
 
 async def captcha(proxy: str = None):
     response = (
-        await httpx.AsyncClient().get(
+        await httpx.AsyncClient(proxy=proxy).get(
             "https://www.google.com/recaptcha/api2/anchor?ar=1&k=6Ld_hskiAAAAADfg9HredZvZx8Z_C8FrNJ519Rc6&co=aHR0cHM6Ly9waXhhaS5hcnQ6NDQz&hl=ja&v=aR-zv8WjtWx4lAw-tRCA-zca&size=invisible&cb=u2wj0bvs99s6",
-            proxy=proxy,
         )
     ).text
     recaptcha_token = response.split('recaptcha-token" value="')[1].split('">')[0]
@@ -25,10 +24,9 @@ async def captcha(proxy: str = None):
     }
 
     response = (
-        await httpx.AsyncClient().post(
+        await httpx.AsyncClient(proxy=proxy).post(
             "https://www.google.com/recaptcha/api2/reload?k=6Ld_hskiAAAAADfg9HredZvZx8Z_C8FrNJ519Rc6",
             data=payload,
-            proxy=proxy,
         )
     ).text
     try:
