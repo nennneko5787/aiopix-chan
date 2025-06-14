@@ -1,13 +1,13 @@
 import asyncio
 
-from httpx import AsyncClient
+import httpx
 
 
-async def captcha(proxy: str = None, proxies: dict = None):
-    client = AsyncClient(proxy=proxy, proxies=proxies)
+async def captcha(proxy: str = None):
     response = (
-        await client.get(
+        await httpx.AsyncClient().get(
             "https://www.google.com/recaptcha/api2/anchor?ar=1&k=6Ld_hskiAAAAADfg9HredZvZx8Z_C8FrNJ519Rc6&co=aHR0cHM6Ly9waXhhaS5hcnQ6NDQz&hl=ja&v=aR-zv8WjtWx4lAw-tRCA-zca&size=invisible&cb=u2wj0bvs99s6",
+            proxy=proxy,
         )
     ).text
     recaptcha_token = response.split('recaptcha-token" value="')[1].split('">')[0]
@@ -25,14 +25,15 @@ async def captcha(proxy: str = None, proxies: dict = None):
     }
 
     response = (
-        await client.post(
-            f"https://www.google.com/recaptcha/api2/reload?k=6Ld_hskiAAAAADfg9HredZvZx8Z_C8FrNJ519Rc6",
+        await httpx.AsyncClient().post(
+            "https://www.google.com/recaptcha/api2/reload?k=6Ld_hskiAAAAADfg9HredZvZx8Z_C8FrNJ519Rc6",
             data=payload,
+            proxy=proxy,
         )
     ).text
     try:
         token = response.split('"rresp","')[1].split('"')[0]
-    except:
+    except Exception:
         return False
 
     return token
@@ -43,33 +44,8 @@ class PixError(Exception):
 
 
 class PixAI:
-    def __init__(
-        self,
-        proxy: str = None,
-        proxies: dict = None,
-    ) -> None:
-        self.proxy = proxy
-        self.proxies = proxies
-        self.client = AsyncClient(
-            proxy=proxy,
-            proxies=proxies,
-            headers={
-                "Accept": "application/json, text/plain, */*",
-                "Accept-Encoding": "gzip, deflate, br, zstd",
-                "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
-                "Content-Type": "application/json",
-                "Origin": "https://pixai.art",
-                "Priority": "u=1, i",
-                "Referer": "https://pixai.art/",
-                "Sec-Ch-Ua": '"Google Chrome";v="129", "Not=A?Brand";v="8", "Chromium";v="129"',
-                "Sec-Ch-Ua-Mobile": "?0",
-                "Sec-Ch-Ua-Platform": '"Windows"',
-                "Sec-Fetch-Dest": "empty",
-                "Sec-Fetch-Mode": "cors",
-                "Sec-Fetch-Site": "same-site",
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)  AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0  Safari/537.36",
-            },
-        )
+    def __init__(self, proxy: str = None):
+        self.session = httpx.AsyncClient(proxy=proxy, timeout=None)
 
     async def initialize(
         self,
@@ -77,10 +53,26 @@ class PixAI:
         password: str,
         login: bool = True,
         token: str = None,
-    ):
+    ) -> None:
+        self.headers = {
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Content-Type": "application/json",
+            "Origin": "https://pixai.art",
+            "Priority": "u=1, i",
+            "Referer": "https://pixai.art/",
+            "Sec-Ch-Ua": '"Google Chrome";v="129", "Not=A?Brand";v="8", "Chromium";v="129"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"Windows"',
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)  AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0  Safari/537.36",
+        }
+
         if token:
             self.token = token
-            self.client.headers["authorization"] = f"Bearer {self.token}"
+            self.headers["authorization"] = f"Bearer {self.token}"
             self.user_id = None
         else:
             payload = {
@@ -89,7 +81,7 @@ class PixAI:
                     "input": {
                         "email": email,
                         "password": password,
-                        "recaptchaToken": await captcha(),
+                        "recaptchaToken": captcha(self.proxy),
                     }
                 },
             }
@@ -102,15 +94,16 @@ class PixAI:
                     "\n    mutation login($input: RegisterOrLoginInput!) {\n  login(input: $input) {\n    ...UserDetail\n  }\n}\n    \n    fragment UserDetail on User {\n  ...UserBase\n  coverMedia {\n    ...MediaBase\n  }\n  followedByMe\n  followingMe\n  followerCount\n  followingCount\n  inspiredCount\n}\n    \n\n    fragment UserBase on User {\n  id\n  email\n  emailVerified\n  username\n  displayName\n  createdAt\n  updatedAt\n  avatarMedia {\n    ...MediaBase\n  }\n  membership {\n    membershipId\n    tier\n  }\n  isAdmin\n}\n    \n\n    fragment MediaBase on Media {\n  id\n  type\n  width\n  height\n  urls {\n    variant\n    url\n  }\n  imageType\n  fileUrl\n  duration\n  thumbnailUrl\n  hlsUrl\n  size\n  flag {\n    ...ModerationFlagBase\n  }\n}\n    \n\n    fragment ModerationFlagBase on ModerationFlag {\n  status\n  isSensitive\n  isMinors\n  isRealistic\n  isFlagged\n  isSexyPic\n  isSexyText\n  shouldBlur\n  isWarned\n}\n    "
                 )
 
-            response = await self.client.post(
+            response = await self.session.post(
                 "https://api.pixai.art/graphql",
+                headers=self.headers,
                 json=payload,
             )
             if "errors" in response.json():
                 raise PixError(response.json())
 
             self.token = response.headers["Token"]
-            self.client.headers["authorization"] = f"Bearer {self.token}"
+            self.headers["authorization"] = f"Bearer {self.token}"
 
             if not login:
                 self.user_id = response.json()["data"]["register"]["id"]
@@ -123,8 +116,9 @@ class PixAI:
                         }
                     },
                 }
-                response = await self.client.post(
+                response = await self.session.post(
                     "https://api.pixai.art/graphql",
+                    headers=self.headers,
                     json=age_payload,
                 )
             else:
@@ -135,8 +129,9 @@ class PixAI:
             "query": "\n    query getMyQuota {\n  me {\n    quotaAmount\n  }\n}\n    ",
             "variables": {},
         }
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
         if "errors" in response.json():
@@ -150,8 +145,9 @@ class PixAI:
             "variables": {"id": media_id},
         }
 
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
         if "errors" in response.json():
@@ -163,8 +159,9 @@ class PixAI:
         payload = {
             "query": "\n    mutation dailyClaimQuota {\n  dailyClaimQuota\n}\n    "
         }
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
         if "errors" in response.json():
@@ -185,7 +182,7 @@ class PixAI:
             "entry.1264482712": "壁紙・プロフィール画像用",
             "entry.1293236062": "7",
         }
-        await AsyncClient(proxies=self.proxies).post(
+        await self.session.post(
             "https://docs.google.com/forms/u/0/d/e/1FAIpQLSdYvAY6PDOVBl3Bd2FgnkCoz-G0KXk8OV_63gG96FIVYm0mEw/formResponse",
             data=form_data,
         )
@@ -196,8 +193,9 @@ class PixAI:
         if wait > 0:
             await asyncio.sleep(wait)
 
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
         if "errors" in response.json():
@@ -210,8 +208,9 @@ class PixAI:
             "query": "\n    query listMyTasks($status: String, $before: String, $after: String, $first: Int, $last: Int) {\n  me {\n    tasks(\n      status: $status\n      before: $before\n      after: $after\n      first: $first\n      last: $last\n    ) {\n      pageInfo {\n        hasNextPage\n        hasPreviousPage\n        endCursor\n        startCursor\n      }\n      edges {\n        node {\n          ...TaskWithMedia\n        }\n      }\n    }\n  }\n}\n    \n    fragment TaskWithMedia on Task {\n  ...TaskBase\n  favoritedAt\n  artworkIds\n  media {\n    ...MediaBase\n  }\n}\n    \n\n    fragment TaskBase on Task {\n  id\n  userId\n  parameters\n  outputs\n  status\n  priority\n  runnerId\n  startedAt\n  endAt\n  createdAt\n  updatedAt\n  retryCount\n  paidCredit\n  moderationAction {\n    promptsModerationAction\n  }\n}\n    \n\n    fragment MediaBase on Media {\n  id\n  type\n  width\n  height\n  urls {\n    variant\n    url\n  }\n  imageType\n  fileUrl\n  duration\n  thumbnailUrl\n  hlsUrl\n  size\n  flag {\n    ...ModerationFlagBase\n  }\n}\n    \n\n    fragment ModerationFlagBase on ModerationFlag {\n  status\n  isSensitive\n  isMinors\n  isRealistic\n  isFlagged\n  isSexyPic\n  isSexyText\n  shouldBlur\n  isWarned\n}\n    ",
             "variables": {"last": 30},
         }
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
         edges = response.json()["data"]["me"]["tasks"]["edges"]
@@ -223,8 +222,9 @@ class PixAI:
                 "variables": {"id": edge["node"]["id"]},
             }
 
-            response = await self.client.post(
+            response = await self.session.post(
                 "https://api.pixai.art/graphql",
+                headers=self.headers,
                 json=payload,
             )
             if "errors" in response.json():
@@ -237,7 +237,7 @@ class PixAI:
             try:
                 for batch in response.json()["data"]["task"]["outputs"]["batch"]:
                     mediaids.append(batch["mediaId"])
-            except:
+            except Exception:
                 mediaids.append(response.json()["data"]["task"]["outputs"]["mediaId"])
 
             mediaids_all.append(mediaids)
@@ -250,8 +250,9 @@ class PixAI:
             "variables": {"last": 30},
         }
 
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
         if "errors" in response.json():
@@ -272,19 +273,20 @@ class PixAI:
                 != "completed"
             ):
                 return None
-        except:
+        except Exception:
             return None
 
         mediaids = []
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
 
         try:
             for batch in response.json()["data"]["task"]["outputs"]["batch"]:
                 mediaids.append(batch["mediaId"])
-        except:
+        except Exception:
             mediaids.append(response.json()["data"]["task"]["outputs"]["mediaId"])
 
         return mediaids
@@ -294,8 +296,9 @@ class PixAI:
             "query": "\n    query getTaskById($id: ID!) {\n  task(id: $id) {\n    ...TaskDetail\n  }\n}\n    \n    fragment TaskDetail on Task {\n  ...TaskBase\n  favoritedAt\n  artworkId\n  artworkIds\n  artworks {\n    createdAt\n    hidePrompts\n    id\n    isNsfw\n    isSensitive\n    mediaId\n    title\n    updatedAt\n    flag {\n      ...ModerationFlagBase\n    }\n  }\n  media {\n    ...MediaBase\n  }\n  type {\n    type\n    model\n  }\n}\n    \n\n    fragment TaskBase on Task {\n  id\n  userId\n  parameters\n  outputs\n  status\n  priority\n  runnerId\n  startedAt\n  endAt\n  createdAt\n  updatedAt\n  retryCount\n  paidCredit\n  moderationAction {\n    promptsModerationAction\n  }\n}\n    \n\n    fragment ModerationFlagBase on ModerationFlag {\n  status\n  isSensitive\n  isMinors\n  isRealistic\n  isFlagged\n  isSexyPic\n  isSexyText\n  shouldBlur\n  isWarned\n}\n    \n\n    fragment MediaBase on Media {\n  id\n  type\n  width\n  height\n  urls {\n    variant\n    url\n  }\n  imageType\n  fileUrl\n  duration\n  thumbnailUrl\n  hlsUrl\n  size\n  flag {\n    ...ModerationFlagBase\n  }\n}\n    ",
             "variables": {"id": query_id},
         }
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
         if "errors" in response.json():
@@ -304,27 +307,20 @@ class PixAI:
         try:
             if response.json()["data"]["task"]["status"] != "completed":
                 return None
-        except:
+        except Exception:
             return None
 
         mediaids = []
         try:
             for batch in response.json()["data"]["task"]["outputs"]["batch"]:
                 mediaids.append(batch["mediaId"])
-        except:
+        except Exception:
             mediaids.append(response.json()["data"]["task"]["outputs"]["mediaId"])
 
         return mediaids
 
     async def generate_image(
-        self,
-        prompts: str,
-        *,
-        negative_prompts: str = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, quality bad, hands bad, eyes bad, face bad, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name\n",
-        model_id: str = "1709400693561386681",
-        width: int = 768,
-        height: int = 1280,
-        x4: bool = False,
+        self, prompts: str, width: int = 768, height: int = 1280, x4: bool = False
     ):
         payload = {
             "query": "\n    mutation createGenerationTask($parameters: JSONObject!) {\n  createGenerationTask(parameters: $parameters) {\n    ...TaskBase\n  }\n}\n    \n    fragment TaskBase on Task {\n  id\n  userId\n  parameters\n  outputs\n  status\n  priority\n  runnerId\n  startedAt\n  endAt\n  createdAt\n  updatedAt\n  retryCount\n  paidCredit\n  moderationAction {\n    promptsModerationAction\n  }\n}\n    ",
@@ -332,8 +328,8 @@ class PixAI:
                 "parameters": {
                     "prompts": prompts,
                     "extra": {},
-                    "negativePrompts": negative_prompts,
-                    "samplingSteps": 25,
+                    "negativePrompts": "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, quality bad, hands bad, eyes bad, face bad, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name\n",
+                    "samplingSteps": 25,  # ↑nsfwは消した、みんないらないよね？ (By たか)
                     "samplingMethod": "Euler a",
                     "cfgScale": 6,
                     "seed": "",
@@ -341,7 +337,7 @@ class PixAI:
                     "width": width,
                     "height": height,
                     "clipSkip": 1,
-                    "modelId": model_id,
+                    "modelId": "1709400693561386681",
                     "controlNets": [],
                 }
             },
@@ -349,8 +345,9 @@ class PixAI:
         if x4:
             payload["batchSize"] = 4
 
-        response = await self.client.post(
+        response = await self.session.post(
             "https://api.pixai.art/graphql",
+            headers=self.headers,
             json=payload,
         )
         if "errors" in response.json():
