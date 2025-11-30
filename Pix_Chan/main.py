@@ -347,7 +347,7 @@ class PixAI:
         negative_prompts: str = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, quality bad, hands bad, eyes bad, face bad, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name\n",
         width: int = 768,
         height: int = 1280,
-        modelId: str = "1709400693561386681",
+        model_id: str = "1709400693561386681",
         x4: bool = False,
     ):
         payload = {
@@ -365,7 +365,7 @@ class PixAI:
                     "width": width,
                     "height": height,
                     "clipSkip": 1,
-                    "modelId": modelId,
+                    "modelId": model_id,
                     "controlNets": [],
                 }
             },
