@@ -1,4 +1,5 @@
 import asyncio
+from typing import List, NamedTuple
 
 import httpx
 
@@ -39,6 +40,11 @@ async def captcha(proxy: str = None):
 
 class PixError(Exception):
     pass
+
+
+class Model(NamedTuple):
+    id: str
+    title: str
 
 
 class PixAI:
@@ -202,6 +208,23 @@ class PixAI:
 
         return response.json()
 
+    async def get_models(self) -> List[Model]:
+        models = []
+
+        payload = {
+            "query": "\n    query listGenerationModels($before: String, $after: String, $first: Int, $last: Int, $orderBy: String, $tag: String, $type: GenerationModelType, $types: [GenerationModelType], $timeRange: DateRange, $keyword: String, $feed: String, $authorId: ID, $category: String, $loraBaseModelTypes: [GenerationModelType!], $loraBaseModelIds: [ID!]) {\n  generationModels(\n    before: $before\n    after: $after\n    first: $first\n    last: $last\n    orderBy: $orderBy\n    tag: $tag\n    type: $type\n    types: $types\n    timeRange: $timeRange\n    keyword: $keyword\n    feed: $feed\n    authorId: $authorId\n    category: $category\n    loraBaseModelTypes: $loraBaseModelTypes\n    loraBaseModelIds: $loraBaseModelIds\n  ) {\n    edges {\n      node {\n        ...GenerationModelPreview\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      endCursor\n      startCursor\n    }\n    totalCount\n  }\n}\n    \n    fragment GenerationModelPreview on GenerationModel {\n  ...GenerationModelBase\n  loraBaseModelTypes\n  likedCount\n  liked\n  refCount\n  commentCount\n  artworkSafetyScore {\n    safetyScoreSum\n    safetyScoreCount\n  }\n  latestAvailableVersion {\n    ...GenerationModelVersionBase\n    status\n    downloadUrl\n  }\n  tags {\n    ...TagBase\n  }\n}\n    \n\n    fragment GenerationModelBase on GenerationModel {\n  id\n  authorId\n  title\n  mediaId\n  media {\n    ...MediaBase\n  }\n  type\n  category\n  extra\n  createdAt\n  updatedAt\n  isNsfw\n  isDownloadable\n  isPrivate\n  flag {\n    ...ModerationFlagPreview\n  }\n  loraBaseModelTypes\n}\n    \n\n    fragment MediaBase on Media {\n  id\n  type\n  width\n  height\n  urls {\n    variant\n    url\n  }\n  imageType\n  fileUrl\n  duration\n  thumbnailUrl\n  hlsUrl\n  size\n  flag {\n    ...ModerationFlagPreview\n  }\n}\n    \n\n    fragment ModerationFlagPreview on ModerationFlag {\n  shouldBlur\n}\n    \n\n    fragment GenerationModelVersionBase on GenerationModelVersion {\n  id\n  modelId\n  mediaId\n  media {\n    ...MediaBase\n  }\n  name\n  fileUploadId\n  createdAt\n  updatedAt\n  extra\n  loraBaseModelType\n  loraBaseModelId\n}\n    \n\n    fragment TagBase on Tag {\n  id\n  name\n  displayName\n  mediaId\n  createdAt\n  updatedAt\n  extra\n}\n    ",
+            "variables": {"feed": "preset", "type": "ANY_MODEL"},
+        }
+        response = await self.session.post(
+            "https://api.pixai.art/graphql", headers=self.headers, json=payload
+        )
+        edges = response.json()["data"]["generationModels"]["edges"]
+        for edge in edges:
+            node = edge["node"]
+            models.append(Model(node["id"], node["title"]))
+
+        return models
+
     async def get_all_tasks(self):
         payload = {
             "query": "\n    query listMyTasks($status: String, $before: String, $after: String, $first: Int, $last: Int) {\n  me {\n    tasks(\n      status: $status\n      before: $before\n      after: $after\n      first: $first\n      last: $last\n    ) {\n      pageInfo {\n        hasNextPage\n        hasPreviousPage\n        endCursor\n        startCursor\n      }\n      edges {\n        node {\n          ...TaskWithMedia\n        }\n      }\n    }\n  }\n}\n    \n    fragment TaskWithMedia on Task {\n  ...TaskBase\n  favoritedAt\n  artworkIds\n  media {\n    ...MediaBase\n  }\n}\n    \n\n    fragment TaskBase on Task {\n  id\n  userId\n  parameters\n  outputs\n  status\n  priority\n  runnerId\n  startedAt\n  endAt\n  createdAt\n  updatedAt\n  retryCount\n  paidCredit\n  moderationAction {\n    promptsModerationAction\n  }\n}\n    \n\n    fragment MediaBase on Media {\n  id\n  type\n  width\n  height\n  urls {\n    variant\n    url\n  }\n  imageType\n  fileUrl\n  duration\n  thumbnailUrl\n  hlsUrl\n  size\n  flag {\n    ...ModerationFlagBase\n  }\n}\n    \n\n    fragment ModerationFlagBase on ModerationFlag {\n  status\n  isSensitive\n  isMinors\n  isRealistic\n  isFlagged\n  isSexyPic\n  isSexyText\n  shouldBlur\n  isWarned\n}\n    ",
@@ -324,6 +347,7 @@ class PixAI:
         negative_prompts: str = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, quality bad, hands bad, eyes bad, face bad, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name\n",
         width: int = 768,
         height: int = 1280,
+        modelId: str = "1709400693561386681",
         x4: bool = False,
     ):
         payload = {
@@ -341,7 +365,7 @@ class PixAI:
                     "width": width,
                     "height": height,
                     "clipSkip": 1,
-                    "modelId": "1709400693561386681",
+                    "modelId": modelId,
                     "controlNets": [],
                 }
             },
