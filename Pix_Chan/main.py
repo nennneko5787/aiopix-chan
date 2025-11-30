@@ -347,7 +347,7 @@ class PixAI:
             },
         }
         if x4:
-            payload["batchSize"] = 4
+            payload["variables"]["parameters"]["batchSize"] = 4
 
         response = await self.session.post(
             "https://api.pixai.art/graphql",
