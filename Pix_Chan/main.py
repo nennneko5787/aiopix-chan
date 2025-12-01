@@ -1,4 +1,5 @@
 import asyncio
+import math
 from typing import List, NamedTuple
 
 import httpx
@@ -44,7 +45,16 @@ class PixError(Exception):
 
 class Model(NamedTuple):
     id: str
+    latestVersionId: str
     title: str
+    type: str
+
+
+class ModelVersion(NamedTuple):
+    negative_prompts: str
+    sampling_method: str
+    sampling_steps: int
+    cfg_scale: int
 
 
 class PixAI:
@@ -208,6 +218,139 @@ class PixAI:
 
         return response.json()
 
+    def calculate_price(
+        self,
+        width=512,
+        height=512,
+        sampling_steps=28,
+        batch_size=1,
+        upscale=1.0,
+        model_type="sd",  # "sd", "sdxl", "sd3medium", "dit"
+        base_price=400,
+        base_step=28,
+        control_nets=0,
+        enable_adetailer=False,
+        priority=1000,  # デフォルトは1000（HighPriority）
+        is_img2img=False,
+        strength=0.7,
+        enable_tile=False,
+        sampler_multiplier=1.0,
+        email_verified=False,
+    ):
+        """
+        画像生成の価格を計算
+
+        Args:
+            width: 画像の幅
+            height: 画像の高さ
+            sampling_steps: サンプリングステップ数
+            batch_size: バッチサイズ
+            upscale: アップスケール倍率
+            model_type: モデルタイプ ("sd", "sdxl", "sd3medium", "dit")
+            base_price: ベース価格
+            base_step: 基準ステップ数（デフォルト28）
+            control_nets: ControlNetsの数
+            enable_adetailer: ADetailerを使用するか
+            priority: 優先度 (0=通常, 1000=高(デフォルト), 1500=最高)
+            is_img2img: img2imgモードか
+            strength: img2imgの強度
+            enable_tile: タイルモードを使用するか
+            sampler_multiplier: サンプラーの倍率
+            email_verified: メール認証済みか（バッチサイズ>1で50%割引）
+
+        Returns:
+            int: 最終価格
+        """
+
+        # ベース価格の調整
+        current_price = base_price
+
+        if model_type == "dit":
+            if is_img2img:
+                current_price = base_price * 2
+            else:
+                is_standard = (width, height) in [
+                    (768, 1280),
+                    (1280, 768),
+                    (1024, 1024),
+                ]
+                is_standard_steps = 20 <= sampling_steps <= 25
+                current_price = base_price * (
+                    1.5 if is_standard and is_standard_steps else 1.6
+                )
+
+        # モデルタイプ倍率
+        model_multipliers = {"sdxl": 1.25, "sd3medium": 1.625, "dit": 1.25}
+        if model_type in model_multipliers:
+            current_price *= model_multipliers[model_type]
+
+        # サイズ倍率
+        if not enable_tile:
+            size_power = (width * height * upscale * upscale) / (512 * 512)
+            current_price *= size_power
+
+        # ステップ数倍率
+        if is_img2img:
+            effective_steps = 1 + strength * sampling_steps
+        else:
+            effective_steps = sampling_steps
+        step_power = effective_steps / base_step
+        current_price *= step_power
+
+        # サンプラー倍率
+        current_price *= sampler_multiplier
+
+        # ControlNets
+        if control_nets > 0:
+            current_price *= 1.4 ** (control_nets - 1)
+
+        # 100単位で切り捨て
+        current_price = math.floor(current_price / 100) * 100
+
+        # バッチサイズ
+        current_price *= batch_size
+
+        # アップスケール（Hires fix）
+        if upscale > 1 and not enable_tile:
+            # アップスケール用の追加計算
+            upscale_base = base_price if model_type != "dit" else base_price * 1.25
+            upscale_price = (
+                upscale_base * (width * height * upscale * upscale) / (512 * 512)
+            )
+            upscale_price *= effective_steps / 28
+            upscale_price *= sampler_multiplier
+            upscale_price = math.floor(upscale_price / 100) * 100
+
+            # アップスケール価格を追加（50%割引）
+            current_price += upscale_price * 0.5
+
+        # ADetailer
+        if enable_adetailer:
+            adetailer_price = base_price * (1 + 0.8 * sampling_steps) / 28
+            adetailer_price = math.floor(adetailer_price / 100) * 100
+            current_price += adetailer_price
+
+        # ベース価格を引く
+        current_price -= base_price * batch_size
+
+        # メール認証割引（バッチサイズ>1の場合のみ）
+        if email_verified and batch_size > 1 and current_price > 0:
+            current_price *= 0.5
+
+        # 最低価格・最大割引
+        if model_type == "dit":
+            current_price = max(current_price, 1000)
+        else:
+            current_price = max(current_price, 200)
+
+        current_price = max(current_price, -800)
+
+        # 優先度料金
+        if priority >= 1000:
+            current_price += priority
+
+        return int(current_price)
+
     async def get_models(self) -> List[Model]:
         models = []
 
@@ -221,9 +364,34 @@ class PixAI:
         edges = response.json()["data"]["generationModels"]["edges"]
         for edge in edges:
             node = edge["node"]
-            models.append(Model(node["id"], node["title"]))
+
+            models.append(
+                Model(
+                    node["id"],
+                    node["latestAvailableVersion"]["id"],
+                    node["title"],
+                    node["type"].split("_")[0].lower(),
+                )
+            )
 
         return models
+
+    async def get_model_version(self, versionId: str):
+        payload = {
+            "query": "\n    query getGenerationModelByVersionId($id: ID!) {\n  generationModelVersion(id: $id) {\n    ...GenerationModelVersionPreview\n    model {\n      ...GenerationModelBase\n    }\n  }\n}\n    \n    fragment GenerationModelVersionPreview on GenerationModelVersion {\n  ...GenerationModelVersionBase\n  modelType\n  status\n}\n    \n\n    fragment GenerationModelVersionBase on GenerationModelVersion {\n  id\n  modelId\n  mediaId\n  media {\n    ...MediaBase\n  }\n  name\n  fileUploadId\n  createdAt\n  updatedAt\n  extra\n  loraBaseModelType\n  loraBaseModelId\n}\n    \n\n    fragment MediaBase on Media {\n  id\n  type\n  width\n  height\n  urls {\n    variant\n    url\n  }\n  imageType\n  fileUrl\n  duration\n  thumbnailUrl\n  hlsUrl\n  size\n  flag {\n    ...ModerationFlagPreview\n  }\n}\n    \n\n    fragment ModerationFlagPreview on ModerationFlag {\n  shouldBlur\n}\n    \n\n    fragment GenerationModelBase on GenerationModel {\n  id\n  authorId\n  title\n  mediaId\n  media {\n    ...MediaBase\n  }\n  type\n  category\n  extra\n  createdAt\n  updatedAt\n  isNsfw\n  isDownloadable\n  isPrivate\n  flag {\n    ...ModerationFlagPreview\n  }\n  loraBaseModelTypes\n}\n    ",
+            "variables": {"id": versionId},
+        }
+        response = await self.session.post(
+            "https://api.pixai.art/graphql", headers=self.headers, json=payload
+        )
+        generationModelVersion = response.json()["data"]["generationModelVersion"]
+
+        return ModelVersion(
+            generationModelVersion["extra"].get("negativePrompts"),
+            generationModelVersion["extra"].get("samplingMethod"),
+            generationModelVersion["extra"].get("samplingSteps"),
+            generationModelVersion["extra"].get("cfgScale"),
+        )
 
     async def get_all_tasks(self):
         payload = {
@@ -345,6 +513,10 @@ class PixAI:
         self,
         prompts: str,
         negative_prompts: str = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, quality bad, hands bad, eyes bad, face bad, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name\n",
+        sampling_steps: int = 25,
+        sampling_method: str = "Euler a",
+        cfg_scale: int = 6,
+        priority: int = 1000,
         width: int = 768,
         height: int = 1280,
         model_id: str = "1709400693561386681",
@@ -357,11 +529,11 @@ class PixAI:
                     "prompts": prompts,
                     "extra": {},
                     "negativePrompts": negative_prompts,
-                    "samplingSteps": 25,  # ↑nsfwは消した、みんないらないよね？ (By たか)
-                    "samplingMethod": "Euler a",
-                    "cfgScale": 6,
+                    "samplingSteps": sampling_steps,  # ↑nsfwは消した、みんないらないよね？ (By たか)
+                    "samplingMethod": sampling_method,
+                    "cfgScale": cfg_scale,
                     "seed": "",
-                    "priority": 1000,
+                    "priority": priority,
                     "width": width,
                     "height": height,
                     "clipSkip": 1,
