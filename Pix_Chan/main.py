@@ -43,6 +43,11 @@ class PixError(Exception):
     pass
 
 
+class UserInfo(NamedTuple):
+    email: str
+    email_verified: bool
+
+
 class Model(NamedTuple):
     id: str
     latestVersionId: str
@@ -184,6 +189,29 @@ class PixAI:
         )
         if "errors" in response.json():
             raise PixError(response.json())
+
+    async def get_user_info(self):
+        payload = {
+            "operationName": "getUserInfo",
+            "variables": {},
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "87316e816ee97f155f711cabaff32584ccb7152cea7d7b8a0e6a9f1742220b25",
+                }
+            },
+        }
+
+        response = await self.session.post(
+            "https://api.pixai.art/graphql",
+            headers=self.headers,
+            json=payload,
+        )
+        if "errors" in response.json():
+            raise PixError(response.json())
+        user_info = response.json()["data"]["me"]
+
+        return UserInfo(user_info["email"], user_info["emailVerified"])
 
     async def get_quota(self):
         payload = {
