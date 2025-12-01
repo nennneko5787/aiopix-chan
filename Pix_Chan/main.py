@@ -139,6 +139,52 @@ class PixAI:
             else:
                 self.user_id = response.json()["data"]["login"]["id"]
 
+    async def send_verification_code(self):
+        payload = {
+            "operationName": "genCode",
+            "variables": {
+                "input": {
+                    "intent": "VerifyEmail",
+                    "approach": "Email",
+                    "origin": "https://pixai.art",
+                }
+            },
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "ac634799140abee1174bb9d37fe220dca757adf1501c4b3aa84d77c6c7b69802",
+                }
+            },
+        }
+
+        response = await self.session.post(
+            "https://api.pixai.art/graphql",
+            headers=self.headers,
+            json=payload,
+        )
+        if "errors" in response.json():
+            raise PixError(response.json())
+
+    async def verify_code(self, code: str):
+        payload = {
+            "operationName": "verifyEmail",
+            "variables": {"code": code},
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "5231965992b3bcd70a1d8ae40a1b25b3bb579e291903acb984f14f13b0eaa455",
+                }
+            },
+        }
+
+        response = await self.session.post(
+            "https://api.pixai.art/graphql",
+            headers=self.headers,
+            json=payload,
+        )
+        if "errors" in response.json():
+            raise PixError(response.json())
+
     async def get_quota(self):
         payload = {
             "query": "\n    query getMyQuota {\n  me {\n    quotaAmount\n  }\n}\n    ",
@@ -361,6 +407,10 @@ class PixAI:
         response = await self.session.post(
             "https://api.pixai.art/graphql", headers=self.headers, json=payload
         )
+
+        if "errors" in response.json():
+            raise PixError(response.json())
+
         edges = response.json()["data"]["generationModels"]["edges"]
         for edge in edges:
             node = edge["node"]
@@ -384,6 +434,10 @@ class PixAI:
         response = await self.session.post(
             "https://api.pixai.art/graphql", headers=self.headers, json=payload
         )
+
+        if "errors" in response.json():
+            raise PixError(response.json())
+
         generationModelVersion = response.json()["data"]["generationModelVersion"]
 
         return ModelVersion(
