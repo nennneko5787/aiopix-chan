@@ -50,7 +50,7 @@ class UserInfo(NamedTuple):
 
 class Model(NamedTuple):
     id: str
-    latestVersionId: str
+    latest_version_id: str
     title: str
     type: str
 
