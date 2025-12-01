@@ -425,6 +425,27 @@ class PixAI:
 
         return int(current_price)
 
+    async def get_model(self, modelId: str):
+        payload = {
+            "query": "\n    query getGenerationModel($id: ID!) {\n  generationModel(id: $id) {\n    ...GenerationModelDetail\n    myReview {\n      ...ReviewBase\n    }\n  }\n}\n    \n    fragment GenerationModelDetail on GenerationModel {\n  ...GenerationModelPreview\n  author {\n    ...UserBase\n  }\n  reviewSummary {\n    ...ReviewSummaryBase\n  }\n  bookmarked\n  refUserCount\n  latestAvailableVersion {\n    ...GenerationModelVersionWithFile\n  }\n  baseModelVersion {\n    ...GenerationModelVersionBase\n  }\n  trainingTask {\n    ...TrainingTaskBase\n  }\n  loraTrainingTasks {\n    ...TrainingTaskBase\n  }\n  rebateAmount\n  flag {\n    ...ModerationFlagDetail\n  }\n}\n    \n\n    fragment GenerationModelPreview on GenerationModel {\n  ...GenerationModelBase\n  loraBaseModelTypes\n  likedCount\n  liked\n  refCount\n  commentCount\n  artworkSafetyScore {\n    safetyScoreSum\n    safetyScoreCount\n  }\n  latestAvailableVersion {\n    ...GenerationModelVersionBase\n    status\n    downloadUrl\n  }\n  tags {\n    ...TagBase\n  }\n}\n    \n\n    fragment GenerationModelBase on GenerationModel {\n  id\n  authorId\n  title\n  mediaId\n  media {\n    ...MediaBase\n  }\n  type\n  category\n  extra\n  createdAt\n  updatedAt\n  isNsfw\n  isDownloadable\n  isPrivate\n  flag {\n    ...ModerationFlagPreview\n  }\n  loraBaseModelTypes\n}\n    \n\n    fragment MediaBase on Media {\n  id\n  type\n  width\n  height\n  urls {\n    variant\n    url\n  }\n  imageType\n  fileUrl\n  duration\n  thumbnailUrl\n  hlsUrl\n  size\n  flag {\n    ...ModerationFlagPreview\n  }\n}\n    \n\n    fragment ModerationFlagPreview on ModerationFlag {\n  shouldBlur\n}\n    \n\n    fragment GenerationModelVersionBase on GenerationModelVersion {\n  id\n  modelId\n  mediaId\n  media {\n    ...MediaBase\n  }\n  name\n  fileUploadId\n  createdAt\n  updatedAt\n  extra\n  loraBaseModelType\n  loraBaseModelId\n}\n    \n\n    fragment TagBase on Tag {\n  id\n  name\n  displayName\n  mediaId\n  createdAt\n  updatedAt\n  extra\n}\n    \n\n    fragment UserBase on User {\n  id\n  email\n  emailVerified\n  verificationStatus\n  username\n  displayName\n  createdAt\n  updatedAt\n  avatarMediaId\n  membership {\n    membershipId\n    tier\n  }\n  deleteAfter\n  isAdmin\n  accountType\n  activeDecorations {\n    id\n    decorationId\n    decoration {\n      ...DecorationBase\n    }\n    isEnabled\n    obtainedAt\n    obtainedFrom\n    createdAt\n    updatedAt\n    userId\n  }\n}\n    \n\n    fragment DecorationBase on Decoration {\n  id\n  code\n  type\n  data\n  createdAt\n  updatedAt\n}\n    \n\n    fragment ReviewSummaryBase on ReviewSummary {\n  itemId\n  score\n  ratingDetail {\n    rating\n    count\n  }\n}\n    \n\n    fragment GenerationModelVersionWithFile on GenerationModelVersion {\n  ...GenerationModelVersionDetail\n  fileUploadRecord {\n    ...FileUploadRecordBase\n  }\n}\n    \n\n    fragment GenerationModelVersionDetail on GenerationModelVersion {\n  ...GenerationModelVersionBase\n  previewArtworkIds\n  previewArtworks {\n    ...ArtworkBase\n  }\n  modelType\n  downloadUrl\n  status\n}\n    \n\n    fragment ArtworkBase on Artwork {\n  __typename\n  id\n  title\n  authorId\n  prompts\n  createdAt\n  updatedAt\n  mediaId\n  media {\n    ...MediaBase\n  }\n  videoMediaId\n  hidePrompts\n  isPrivate\n  isNsfw\n  isSensitive\n  extra\n  type\n  paidCredit\n  aesScore\n  feedMetadata {\n    retrieverId\n  }\n  flag {\n    ...ModerationFlagDetail\n  }\n}\n    \n\n    fragment ModerationFlagDetail on ModerationFlag {\n  status\n  isSensitive\n  isMinors\n  isRealistic\n  isFlagged\n  isSexyPic\n  isSexyText\n  shouldBlur\n  isWarned\n  isAppealable\n}\n    \n\n    fragment FileUploadRecordBase on FileUploadRecord {\n  id\n  fileSize\n  fileType\n  filename\n  hash\n  sha256\n  asset\n  createdAt\n  updatedAt\n  userId\n  externalId\n  isFinished\n  status\n  extra\n}\n    \n\n    fragment TrainingTaskBase on TrainingTask {\n  id\n  userId\n  status\n  token\n  priority\n  startedAt\n  endAt\n  createdAt\n  updatedAt\n  archived\n  retryCount\n  type\n  refId\n  parameters {\n    title\n    mediaIds\n  }\n  extra {\n    progress\n    estimatedTotalTime\n  }\n  outputs {\n    message\n  }\n}\n    \n\n    fragment ReviewBase on Review {\n  id\n  userId\n  itemId\n  rating\n  createdAt\n  updatedAt\n}\n    ",
+            "variables": {"id": modelId},
+        }
+        response = await self.session.post(
+            "https://api.pixai.art/graphql", headers=self.headers, json=payload
+        )
+
+        if "errors" in response.json():
+            raise PixError(response.json())
+
+        node = response.json()["data"]["generationModel"]
+
+        return Model(
+            node["id"],
+            node["latestAvailableVersion"]["id"],
+            node["title"],
+            node["type"].split("_")[0].lower(),
+        )
+
     async def get_models(self) -> List[Model]:
         models = []
 

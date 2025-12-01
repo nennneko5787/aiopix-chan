@@ -12,7 +12,9 @@ async def main():
     # await pix.claim_daily_quota()
 
     model = (await pix.get_models())[0]
-    modelVersion = await pix.get_model_version(model.latestVersionId)
+    modelVersion = await pix.get_model_version(model.latest_version_id)
+
+    print(model)
 
     print(
         pix.calculate_price(
