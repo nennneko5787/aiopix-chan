@@ -615,6 +615,7 @@ class PixAI:
     async def generate_image(
         self,
         prompts: str,
+        natural_prompts: bool = True,
         negative_prompts: str = "lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, quality bad, hands bad, eyes bad, face bad, normal quality, jpeg artifacts, signature, watermark, username, blurry, artist name\n",
         sampling_steps: int = 25,
         sampling_method: str = "Euler a",
@@ -645,6 +646,8 @@ class PixAI:
                 }
             },
         }
+        if natural_prompts:
+            payload["variables"]["parameters"]["extra"]["naturalPrompts"] = prompts
         if x4:
             payload["variables"]["parameters"]["batchSize"] = 4
 
