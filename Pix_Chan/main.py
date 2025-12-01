@@ -640,7 +640,7 @@ class PixAI:
                     "priority": priority,
                     "width": width,
                     "height": height,
-                    "clipSkip": 1,
+                    "clipSkip": 2,
                     "modelId": model_id,
                     "controlNets": [],
                 }
@@ -648,6 +648,11 @@ class PixAI:
         }
         if natural_prompts:
             payload["variables"]["parameters"]["extra"]["naturalPrompts"] = prompts
+            payload["variables"]["parameters"]["promptHelper"] = {
+                "enable": True,
+                "withStage": True,
+                "userWantToEnable": True,
+            }
         if x4:
             payload["variables"]["parameters"]["batchSize"] = 4
 
