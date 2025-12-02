@@ -1,4 +1,5 @@
 import asyncio
+import enum
 import math
 from typing import List, NamedTuple
 
@@ -60,6 +61,19 @@ class ModelVersion(NamedTuple):
     sampling_method: str
     sampling_steps: int
     cfg_scale: int
+
+
+class SocialMedia(enum.Enum):
+    discord = "discord"
+    twitter = "twitter"
+    instagram = "instagram"
+    youtube = "youtube"
+
+
+mediaLinks = [
+    "https://www.youtube.com/watch?v=n1j0UuijvSc",
+    "https://x.com/PixAI_Official/status/1989530077139218794",
+]
 
 
 class PixAI:
@@ -282,6 +296,48 @@ class PixAI:
         if wait > 0:
             await asyncio.sleep(wait)
 
+        response = await self.session.post(
+            "https://api.pixai.art/graphql",
+            headers=self.headers,
+            json=payload,
+        )
+        if "errors" in response.json():
+            raise PixError(response.json())
+
+        return response.json()
+
+    async def claim_follow_social_quota(self, media: SocialMedia):
+        payload = {
+            "operationName": "followSocialMedia",
+            "variables": {"platform": media.value},
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "923002464a8e816706394061c18316cd2d14f5f025dbd1d08020e44cd8a23546",
+                }
+            },
+        }
+        response = await self.session.post(
+            "https://api.pixai.art/graphql",
+            headers=self.headers,
+            json=payload,
+        )
+        if "errors" in response.json():
+            raise PixError(response.json())
+
+        return response.json()
+
+    async def claim_watch_media_quota(self, link: str):
+        payload = {
+            "operationName": "watchSocialMediaLink",
+            "variables": {"link": link},
+            "extensions": {
+                "persistedQuery": {
+                    "version": 1,
+                    "sha256Hash": "d85257f2f412da9e0f1e70fd57af7dd66ee55b3c24158c57fb3663a520609387",
+                }
+            },
+        }
         response = await self.session.post(
             "https://api.pixai.art/graphql",
             headers=self.headers,
